@@ -146,6 +146,8 @@ export default function VoiceDesk() {
   const shouldListenRef = useRef(false);
   const speechGenerationRef = useRef(0);
   const pendingSpeechRef = useRef("");
+  const completedSpeechRef = useRef("");
+  const recognitionFinalsRef = useRef(new Map<number, string>());
   const turnEndTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -306,22 +308,32 @@ export default function VoiceDesk() {
 
     recognition.onresult = (event) => {
       let interim = "";
-      let finalText = "";
+      for (const index of recognitionFinalsRef.current.keys()) {
+        if (index >= event.resultIndex)
+          recognitionFinalsRef.current.delete(index);
+      }
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const piece = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalText += piece;
+        if (event.results[i].isFinal)
+          recognitionFinalsRef.current.set(i, piece);
         else interim += piece;
       }
+      const currentFinals = [...recognitionFinalsRef.current.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([, piece]) => piece)
+        .join(" ");
+      pendingSpeechRef.current = [completedSpeechRef.current, currentFinals]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
 
       if (interim.trim() && turnEndTimerRef.current !== null) {
         window.clearTimeout(turnEndTimerRef.current);
         turnEndTimerRef.current = null;
       }
 
-      if (finalText.trim() && stateRef.current !== "thinking") {
-        pendingSpeechRef.current = `${pendingSpeechRef.current} ${finalText}`
-          .replace(/\s+/g, " ")
-          .trim();
+      if (currentFinals.trim() && stateRef.current !== "thinking") {
         if (!interim.trim()) {
           if (turnEndTimerRef.current !== null) {
             window.clearTimeout(turnEndTimerRef.current);
@@ -330,6 +342,8 @@ export default function VoiceDesk() {
             turnEndTimerRef.current = null;
             const spoken = pendingSpeechRef.current.trim();
             pendingSpeechRef.current = "";
+            completedSpeechRef.current = "";
+            recognitionFinalsRef.current.clear();
             if (!spoken || stateRef.current === "thinking") return;
             setLiveCaption("");
             setState("listening");
@@ -339,8 +353,7 @@ export default function VoiceDesk() {
       }
 
       setLiveCaption(
-        [pendingSpeechRef.current, interim].filter(Boolean).join(" ") ||
-          finalText,
+        [pendingSpeechRef.current, interim].filter(Boolean).join(" ") || "",
       );
     };
 
@@ -354,6 +367,12 @@ export default function VoiceDesk() {
     };
 
     recognition.onend = () => {
+      if (recognitionFinalsRef.current.size > 0) {
+        if (stateRef.current !== "thinking" && shouldListenRef.current) {
+          completedSpeechRef.current = pendingSpeechRef.current;
+        }
+        recognitionFinalsRef.current.clear();
+      }
       if (
         inCallRef.current &&
         shouldListenRef.current &&
@@ -377,6 +396,8 @@ export default function VoiceDesk() {
       turnEndTimerRef.current = null;
     }
     pendingSpeechRef.current = "";
+    completedSpeechRef.current = "";
+    recognitionFinalsRef.current.clear();
     setError(null);
     setSummary(null);
     setTranscript([]);
@@ -414,6 +435,8 @@ export default function VoiceDesk() {
       turnEndTimerRef.current = null;
     }
     pendingSpeechRef.current = "";
+    completedSpeechRef.current = "";
+    recognitionFinalsRef.current.clear();
     shouldListenRef.current = false;
     inCallRef.current = false;
     setInCall(false);
