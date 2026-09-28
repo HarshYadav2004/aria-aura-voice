@@ -143,7 +143,7 @@ export default function VoiceDesk() {
   const transcriptRef = useRef<ChatTurn[]>([]);
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const shouldListenRef = useRef(false);
-  const bargeInArmedRef = useRef(false);
+  const speechGenerationRef = useRef(0);
 
   useEffect(() => {
     inCallRef.current = inCall;
@@ -189,14 +189,13 @@ export default function VoiceDesk() {
   }, [inCall]);
 
   const speakReply = useCallback((text: string) => {
+    const speechGeneration = ++speechGenerationRef.current;
+    stateRef.current = "speaking";
     setState("speaking");
-    bargeInArmedRef.current = false;
-    window.setTimeout(() => {
-      bargeInArmedRef.current = true;
-    }, 700);
     speakText(text, voiceRef.current, () => {
+      if (speechGeneration !== speechGenerationRef.current) return;
       if (!inCallRef.current || !micEnabledRef.current) return;
-      bargeInArmedRef.current = false;
+      stateRef.current = "listening";
       setState("listening");
       shouldListenRef.current = true;
       try {
@@ -226,6 +225,7 @@ export default function VoiceDesk() {
           : Math.floor((Date.now() - callStartedAtRef.current) / 1000),
       ]);
       transcriptRef.current = next;
+      stateRef.current = "thinking";
       setState("thinking");
       shouldListenRef.current = false;
       try {
@@ -311,16 +311,6 @@ export default function VoiceDesk() {
       }
       setLiveCaption(interim || finalText);
 
-      if (
-        stateRef.current === "speaking" &&
-        bargeInArmedRef.current &&
-        (interim.trim().length > 12 || finalText.trim())
-      ) {
-        stopSpeaking();
-        bargeInArmedRef.current = false;
-        setState("listening");
-      }
-
       if (finalText.trim() && stateRef.current !== "thinking") {
         const spoken = finalText.trim();
         setLiveCaption("");
@@ -400,6 +390,8 @@ export default function VoiceDesk() {
       );
     }
     callStartedAtRef.current = null;
+    speechGenerationRef.current += 1;
+    stateRef.current = "idle";
     setState("idle");
     setLiveCaption("");
     stopSpeaking();
