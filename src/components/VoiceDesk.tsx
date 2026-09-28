@@ -5,6 +5,7 @@ import { getOrderDetails, normalizeOrderId, SAMPLE_ORDERS } from "@/lib/orders";
 import type { ChatTurn } from "@/lib/gemini";
 import {
   getSpeechRecognition,
+  mergeSpeechFragments,
   pickIndianVoice,
   speakText,
   stopSpeaking,
@@ -322,20 +323,18 @@ export default function VoiceDesk() {
       }
       const currentFinals = [...recognitionFinalsRef.current.entries()]
         .sort(([left], [right]) => left - right)
-        .map(([, piece]) => piece)
-        .join(" ");
-      pendingSpeechRef.current = [completedSpeechRef.current, currentFinals]
-        .filter(Boolean)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
+        .map(([, piece]) => piece);
+      pendingSpeechRef.current = mergeSpeechFragments([
+        completedSpeechRef.current,
+        ...currentFinals,
+      ]);
 
       if (interim.trim() && turnEndTimerRef.current !== null) {
         window.clearTimeout(turnEndTimerRef.current);
         turnEndTimerRef.current = null;
       }
 
-      if (currentFinals.trim() && stateRef.current !== "thinking") {
+      if (pendingSpeechRef.current && stateRef.current !== "thinking") {
         if (!interim.trim()) {
           if (turnEndTimerRef.current !== null) {
             window.clearTimeout(turnEndTimerRef.current);
@@ -354,9 +353,7 @@ export default function VoiceDesk() {
         }
       }
 
-      setLiveCaption(
-        [pendingSpeechRef.current, interim].filter(Boolean).join(" ") || "",
-      );
+      setLiveCaption(mergeSpeechFragments([pendingSpeechRef.current, interim]));
     };
 
     recognition.onerror = (event) => {
