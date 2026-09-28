@@ -270,27 +270,20 @@ export default function VoiceDesk() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Something went wrong.";
-        setError(message);
-        const isModelBusy =
-          /temporarily busy|high demand|unavailable|try again later/i.test(
-            message,
-          );
-        const fallback = isModelBusy
-          ? "I'm temporarily busy. Please wait a few seconds, then try again."
-          : "I'm having a little trouble on my side. Could you try saying that again?";
-        const withReply: ChatTurn[] = [
-          ...transcriptRef.current,
-          { role: "assistant", content: fallback },
-        ];
-        setTranscript(withReply);
-        setTurnTimestamps((previous) => [
-          ...previous,
-          callStartedAtRef.current === null
-            ? 0
-            : Math.floor((Date.now() - callStartedAtRef.current) / 1000),
-        ]);
-        transcriptRef.current = withReply;
-        if (inCallRef.current) speakReply(fallback);
+        shouldListenRef.current = false;
+        micEnabledRef.current = false;
+        setMicEnabled(false);
+        stateRef.current = "idle";
+        setState("idle");
+        setLiveCaption("");
+        try {
+          recognitionRef.current?.abort();
+        } catch {
+          /* ignore */
+        }
+        setError(
+          `${message} Voice input is paused. Tap the microphone button to retry.`,
+        );
       }
     },
     [speakReply],

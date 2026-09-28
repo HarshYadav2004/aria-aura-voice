@@ -28,8 +28,13 @@ export async function POST(request: Request) {
         ? Number((error as { status?: number }).status)
         : undefined;
     const lower = message.toLowerCase();
-    const capacityError =
+    const rateLimitError =
       errorStatus === 429 ||
+      lower.includes("resource_exhausted") ||
+      lower.includes("rate limit") ||
+      lower.includes("quota exceeded");
+    const capacityError =
+      rateLimitError ||
       errorStatus === 503 ||
       lower.includes("high demand") ||
       lower.includes("unavailable") ||
@@ -37,7 +42,7 @@ export async function POST(request: Request) {
     const status = message.includes("GEMINI_API_KEY")
       ? 500
       : capacityError
-        ? errorStatus === 429
+        ? rateLimitError
           ? 429
           : 503
         : 502;
@@ -45,6 +50,9 @@ export async function POST(request: Request) {
     if (status === 500) {
       friendly =
         "Server is missing GEMINI_API_KEY. Add your Google AI Studio key to .env.local.";
+    } else if (rateLimitError) {
+      friendly =
+        "Gemini's rate limit or API quota was reached. Wait a little and retry; if it continues, check this project's Google AI Studio quota.";
     } else if (capacityError) {
       friendly =
         "Gemini is temporarily busy. Please try again in a few seconds.";
@@ -63,7 +71,9 @@ export async function POST(request: Request) {
       { error: friendly },
       {
         status,
-        ...(capacityError ? { headers: { "Retry-After": "3" } } : {}),
+        ...(capacityError && !rateLimitError
+          ? { headers: { "Retry-After": "3" } }
+          : {}),
       },
     );
   }

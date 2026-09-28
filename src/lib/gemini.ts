@@ -142,6 +142,17 @@ function errorLooksLikeCapacity(message: string, error: unknown) {
   );
 }
 
+function errorLooksLikeRateLimit(message: string, error: unknown) {
+  const status =
+    typeof error === "object" && error && "status" in error
+      ? Number((error as { status?: number }).status)
+      : undefined;
+  return (
+    status === 429 ||
+    /resource_exhausted|rate.?limit|quota exceeded/i.test(message)
+  );
+}
+
 function extractFunctionCalls(response: {
   functionCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
   candidates?: Array<{
@@ -207,6 +218,9 @@ async function generateWithFallback(args: {
       } catch (error) {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
+        if (errorLooksLikeRateLimit(message, error)) {
+          throw error;
+        }
         if (errorLooksLikeInvalidKey(message)) {
           throw error;
         }
