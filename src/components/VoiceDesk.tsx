@@ -14,6 +14,7 @@ import {
 
 const GREETING =
   "Hi, this is Aria from Aura Skincare. How can I help you today?";
+const TURN_END_DELAY_MS = 1800;
 
 function StateDot({ state, label }: { state: AgentState; label?: string }) {
   const map: Record<AgentState, { label: string; className: string }> = {
@@ -144,6 +145,8 @@ export default function VoiceDesk() {
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const shouldListenRef = useRef(false);
   const speechGenerationRef = useRef(0);
+  const pendingSpeechRef = useRef("");
+  const turnEndTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     inCallRef.current = inCall;
@@ -309,14 +312,36 @@ export default function VoiceDesk() {
         if (event.results[i].isFinal) finalText += piece;
         else interim += piece;
       }
-      setLiveCaption(interim || finalText);
+
+      if (interim.trim() && turnEndTimerRef.current !== null) {
+        window.clearTimeout(turnEndTimerRef.current);
+        turnEndTimerRef.current = null;
+      }
 
       if (finalText.trim() && stateRef.current !== "thinking") {
-        const spoken = finalText.trim();
-        setLiveCaption("");
-        setState("listening");
-        void sendToAgent(spoken);
+        pendingSpeechRef.current = `${pendingSpeechRef.current} ${finalText}`
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!interim.trim()) {
+          if (turnEndTimerRef.current !== null) {
+            window.clearTimeout(turnEndTimerRef.current);
+          }
+          turnEndTimerRef.current = window.setTimeout(() => {
+            turnEndTimerRef.current = null;
+            const spoken = pendingSpeechRef.current.trim();
+            pendingSpeechRef.current = "";
+            if (!spoken || stateRef.current === "thinking") return;
+            setLiveCaption("");
+            setState("listening");
+            void sendToAgent(spoken);
+          }, TURN_END_DELAY_MS);
+        }
       }
+
+      setLiveCaption(
+        [pendingSpeechRef.current, interim].filter(Boolean).join(" ") ||
+          finalText,
+      );
     };
 
     recognition.onerror = (event) => {
@@ -347,6 +372,11 @@ export default function VoiceDesk() {
   }, [sendToAgent]);
 
   const startCall = async () => {
+    if (turnEndTimerRef.current !== null) {
+      window.clearTimeout(turnEndTimerRef.current);
+      turnEndTimerRef.current = null;
+    }
+    pendingSpeechRef.current = "";
     setError(null);
     setSummary(null);
     setTranscript([]);
@@ -379,6 +409,11 @@ export default function VoiceDesk() {
   };
 
   const endCall = async () => {
+    if (turnEndTimerRef.current !== null) {
+      window.clearTimeout(turnEndTimerRef.current);
+      turnEndTimerRef.current = null;
+    }
+    pendingSpeechRef.current = "";
     shouldListenRef.current = false;
     inCallRef.current = false;
     setInCall(false);
