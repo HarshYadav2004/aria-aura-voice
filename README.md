@@ -2,7 +2,10 @@
 
 Browser-based voice CX agent for the Datastraw internship assignment. Evaluators click **Start Call**, speak with Aria through the microphone, and hear replies. After **End Call**, the page shows a transcript and a structured JSON outcome.
 
-Live app: add your public URL here after deploy (`https://…`).
+Live app: https://aria-aura-voice.vercel.app/
+
+- GitHub repository: https://github.com/HarshYadav2004/aria-aura-voice
+- GitHub profile: https://github.com/HarshYadav2004
 
 ## Approach (2–3 sentences)
 
@@ -23,6 +26,10 @@ End Call → POST /api/summary → transcript + JSON outcome
 - **Why this stack:** Next.js is easy to deploy on Vercel; a single **Google AI Studio** key covers the LLM (as requested). Browser STT/TTS keep extra vendor cost and latency down, which matters for a voice demo.
 - **Tool use:** Gemini only calls `get_order_details` when the customer is asking about a real order. General policy questions (shipping time, COD limit) are answered from the system prompt with no tool call.
 - **Guardrails:** Policies live in `src/lib/systemPrompt.ts`. The model is told not to invent orders, not to promise refunds/cancellations outside policy, and to refuse out-of-scope requests.
+
+## Known limitation
+
+Browser speech recognition can pick up synthesized audio if it is active while Aria speaks. To prevent self-triggered turns, the app pauses recognition during TTS and resumes it when the response finishes. Barge-in is therefore not supported; wait for Aria to finish before speaking. Supporting interruption safely would require an audio pipeline with acoustic echo cancellation or a speech service that can distinguish microphone input from agent playback.
 
 ## Setup
 
@@ -50,11 +57,11 @@ Firefox does not support the Web Speech recognition API used here.
 
 ## Test orders (also shown in the UI)
 
-| Order ID | Customer | Product | Status | Notes |
-| --- | --- | --- | --- | --- |
-| ORD-101 | Priya Sharma | Vitamin C Serum (30ml) | Out for Delivery | BlueDart BD-982103, expected by 6 PM |
-| ORD-102 | Rahul Verma | Hydrating Sunscreen SPF 50 | Delivered 14 days ago | Return window expired |
-| ORD-103 | Ananya Patel | Green Tea Face Wash + Toner | Processing | Eligible for cancellation |
+| Order ID | Customer     | Product                     | Status                | Notes                                |
+| -------- | ------------ | --------------------------- | --------------------- | ------------------------------------ |
+| ORD-101  | Priya Sharma | Vitamin C Serum (30ml)      | Out for Delivery      | BlueDart BD-982103, expected by 6 PM |
+| ORD-102  | Rahul Verma  | Hydrating Sunscreen SPF 50  | Delivered 14 days ago | Return window expired                |
+| ORD-103  | Ananya Patel | Green Tea Face Wash + Toner | Processing            | Eligible for cancellation            |
 
 Suggested probes: track ORD-101, cancel ORD-103, return opened ORD-102 after 14 days, ask for standard delivery time, ask to book a flight to Goa.
 
@@ -94,4 +101,4 @@ Move from in-memory mock orders to a real order API with auth; add call recordin
 
 ## LinkedIn
 
-Add your LinkedIn profile URL here before submitting.
+https://linkedin.com/in/harsh-yadav-056656369
