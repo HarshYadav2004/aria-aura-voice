@@ -213,7 +213,9 @@ export default function VoiceDesk() {
 
   const sendToAgent = useCallback(
     async (userText: string) => {
-      const orderMention = userText.match(/\bORD\s*-?\s*\d+\b/i)?.[0];
+      const orderMention = userText.match(
+        /\b(?:ORD|ORDER(?:\s*ID)?|ID)\s*(?:IS\s*)?-?\s*\d+\b/i,
+      )?.[0];
       if (orderMention) {
         const order = getOrderDetails(normalizeOrderId(orderMention));
         if (!("error" in order)) setSelectedOrderId(order.order_id);

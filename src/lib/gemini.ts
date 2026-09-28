@@ -36,18 +36,51 @@ const MODEL_CANDIDATES = [
 const getOrderDetailsDecl = {
   name: "get_order_details",
   description:
-    "Look up a live Aura Skincare order by order ID (for example ORD-101). Use this before stating any order status, tracking, cancellation eligibility, or delivery details.",
+    "Look up a live Aura Skincare order by order ID. Accept spoken or written forms such as ORD-101, ORD 101, order ID 101, or just 101 as the same ID. Use this before stating any order status, tracking, cancellation eligibility, or delivery details.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       order_id: {
         type: Type.STRING,
-        description: "The order ID, such as ORD-101",
+        description:
+          "The order ID. For example, ORD-101, ORD 101, order ID 101, and 101 refer to the same order.",
       },
     },
     required: ["order_id"],
   },
 };
+
+const CLOSING_OFFER_PATTERN =
+  /\b(?:anything else|anything more|other questions?|other things?|further assistance|more i can help)\b/i;
+const NEEDS_CUSTOMER_INPUT_PATTERN =
+  /\b(?:could you|can you|please)\s+(?:share|provide|confirm|repeat|clarify|tell me)|\bwhat(?:'s| is) your order id\b|\bwhich order\b/i;
+
+function isCustomerDone(message: string, previousAssistant: string) {
+  const normalized = message
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?,]/g, "")
+    .replace(/\s+/g, " ");
+  const shortAcknowledgement = /^(?:no|thanks?|thank you)$/i.test(normalized);
+  if (shortAcknowledgement && !CLOSING_OFFER_PATTERN.test(previousAssistant)) {
+    return false;
+  }
+  return /^(?:no(?: thanks?| thank you)?|thanks?|thank you|that'?s it|that is it|that'?s all|that is all|nothing else|no more (?:questions|help)|i'?m good|i am good|we'?re good|all good|that'?s everything|that is everything)$/i.test(
+    normalized,
+  );
+}
+
+function addClosingOffer(reply: string) {
+  const text = reply.trim();
+  if (
+    CLOSING_OFFER_PATTERN.test(text) ||
+    NEEDS_CUSTOMER_INPUT_PATTERN.test(text)
+  ) {
+    return text;
+  }
+  const separator = /[.!?]$/.test(text) ? " " : ". ";
+  return `${text}${separator}Is there anything else I can help you with?`;
+}
 
 function toContents(messages: ChatTurn[]) {
   const contents: Array<{
@@ -195,6 +228,19 @@ async function generateWithFallback(args: {
 }
 
 export async function runAriaTurn(messages: ChatTurn[]): Promise<string> {
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user")?.content;
+  const previousAssistantMessage =
+    [...messages].reverse().find((message) => message.role === "assistant")
+      ?.content ?? "";
+  if (
+    latestUserMessage &&
+    isCustomerDone(latestUserMessage, previousAssistantMessage)
+  ) {
+    return "No problem. Please end the call from your side whenever you're ready.";
+  }
+
   const contents: Array<{
     role: string;
     parts: Array<Record<string, unknown>>;
@@ -218,7 +264,7 @@ export async function runAriaTurn(messages: ChatTurn[]): Promise<string> {
       if (!text) {
         return "Sorry, I didn't quite catch that. Could you please repeat it?";
       }
-      return text;
+      return addClosingOffer(text);
     }
 
     const modelContent = response.candidates?.[0]?.content;

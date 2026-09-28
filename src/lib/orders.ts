@@ -1,4 +1,8 @@
-export type OrderStatus = "Processing" | "Shipped" | "Out for Delivery" | "Delivered";
+export type OrderStatus =
+  | "Processing"
+  | "Shipped"
+  | "Out for Delivery"
+  | "Delivered";
 
 export type Order = {
   order_id: string;
@@ -55,9 +59,12 @@ const ORDERS: Record<string, Order> = {
 export const SAMPLE_ORDERS = Object.values(ORDERS);
 
 export function normalizeOrderId(raw: string): string {
-  const upper = raw.toUpperCase().replace(/\s+/g, "");
-  const match = upper.match(/ORD-?(\d+)/);
+  const cleaned = raw.trim().toUpperCase();
+  const match = cleaned.match(
+    /\b(?:ORD|ORDER(?:\s*ID)?|ID)\s*(?:IS\s*)?-?\s*(\d+)\b/,
+  );
   if (match) return `ORD-${match[1]}`;
+  if (/^\d+$/.test(cleaned)) return `ORD-${cleaned}`;
   return raw.trim();
 }
 
