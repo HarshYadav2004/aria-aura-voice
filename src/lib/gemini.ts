@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { getOrderDetails } from "./orders";
+import { getOrderDetails, normalizeOrderId } from "./orders";
 import { ARIA_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "./systemPrompt";
 
 export type ChatTurn = {
@@ -100,6 +100,19 @@ function toContents(messages: ChatTurn[]) {
     contents.shift();
   }
   return contents;
+}
+
+function findRecentOrder(messages: ChatTurn[]) {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== "user") continue;
+    const mention = message.content.match(
+      /\b(?:ORD\s*-?\s*\d+|ORDER(?:\s*ID)?\s*(?:IS\s*)?-?\s*\d+|ID\s*(?:IS\s*)?-?\s*\d+)\b/i,
+    )?.[0];
+    const standaloneId = message.content.match(/^\s*(\d+)\s*[?.!,]?\s*$/)?.[1];
+    const orderId = mention ?? standaloneId;
+    if (orderId) return getOrderDetails(normalizeOrderId(orderId));
+  }
+  return null;
 }
 
 function errorLooksLikeInvalidKey(message: string) {
@@ -259,17 +272,24 @@ export async function runAriaTurn(messages: ChatTurn[]): Promise<string> {
     role: string;
     parts: Array<Record<string, unknown>>;
   }> = toContents(messages);
+  const recentOrder = findRecentOrder(messages);
 
   if (!contents.length) {
     return "Sorry, I didn't quite catch that. Could you please repeat it?";
   }
 
+  const systemInstruction = recentOrder
+    ? `${ARIA_SYSTEM_PROMPT}\n\nA server-verified order lookup is included for this conversation: ${JSON.stringify(recentOrder)}. Use these verified details to answer. Do not call get_order_details again for this order.`
+    : ARIA_SYSTEM_PROMPT;
+
   for (let step = 0; step < 4; step++) {
     const response = await generateWithFallback({
       contents,
-      systemInstruction: ARIA_SYSTEM_PROMPT,
+      systemInstruction,
       temperature: 0.4,
-      tools: [{ functionDeclarations: [getOrderDetailsDecl] }],
+      ...(recentOrder
+        ? {}
+        : { tools: [{ functionDeclarations: [getOrderDetailsDecl] }] }),
     });
 
     const calls = extractFunctionCalls(response);

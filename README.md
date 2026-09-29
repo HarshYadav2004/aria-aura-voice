@@ -13,15 +13,7 @@ Aria is a modular in-browser voice pipeline: Chrome/Edge **Speech Recognition** 
 
 ## Architecture
 
-```
-Microphone
-    → Web Speech API (STT, en-IN)
-    → POST /api/chat  (Gemini + get_order_details)
-    → Speech Synthesis (TTS)
-    → Speakers
-
-End Call → POST /api/summary → transcript + JSON outcome
-```
+<img src="/architecture.svg" alt="Aria architecture diagram" width="100%" />
 
 - **Why this stack:** Next.js is easy to deploy on Vercel; a single **Google AI Studio** key covers the LLM (as requested). Browser STT/TTS keep extra vendor cost and latency down, which matters for a voice demo.
 - **Tool use:** Gemini only calls `get_order_details` when the customer is asking about a real order. General policy questions (shipping time, COD limit) are answered from the system prompt with no tool call.
